@@ -1,0 +1,67 @@
+#!/bin/bash
+#
+# gitwine - a tool to automatically build and install the latest verision of wine from the git repo
+#
+# by DancingBear
+#
+# 08/19/2012
+
+: ${INSTALLDIR:=/opt}
+: ${THREADS:=8}
+: ${TEMPDIR:=/tmp}
+
+PROG=$(basename $0)
+
+if  ! which git >/dev/null 2>&1 ; then
+    echo "$PROG: ERROR - Git not found" 1>&2
+    exit 1
+fi
+
+if [[ $# -gt 0 ]]; then
+    echo "Usage: $PROG" 1>&2
+    exit 1
+fi
+
+if  ! [[ -r $INSTALLDIR && -w $INSTALLDIR ]]; then
+    echo "$PROG: ERROR - unable to read or write to $INSTALLDIR"
+    echo "Please check permissions or export INSTALLDIR=/to/a/writeable/location and run $PROG again." 1>&2
+    exit 1
+fi
+
+echo "+---------------------+"
+echo "       \~~~/"
+echo "\~~~/   \_/"
+echo " \_/     Y"
+echo "  Y     _|_  gitwine"
+echo " _|_"
+echo "+---------------------+"
+
+echo "[+] Pulling latest build from git..."
+
+if [ -d $HOME/wine-git ]; then
+    (cd $HOME/wine-git; git pull git://source.winehq.org/git/wine.git)
+else
+    git clone git://source.winehq.org/git/wine.git $HOME/wine-git
+fi
+
+cd $HOME/wine-git
+
+VERSION="wine-$(awk '{print $3}' VERSION)-git-$(date +%Y.%m.%d)"
+
+if [ -e "${INSTALLDIR}"/"${VERSION}" ]; then
+    VERSION="wine-$(awk '{print $3}' VERSION)-git-$(date +%Y.%m.%d-%H%M%S)"
+fi
+
+echo "[+] Configuring before make..." 1>&2
+echo "[+] Configure warnings/errors shown below. Full log at: $TEMPDIR/$PROG.configure-log.$$}" 1>&2
+
+./configure --prefix="${INSTALLDIR}"/"${VERSION}" | tee -a $TEMPDIR/$PROG.configure-log.$$ | grep configure
+
+echo "[+] Cleaning any previous makes..."
+make clean all >/dev/null 2>&1
+echo "[+] Compiling...this may take a while. Full log at: $TEMPDIR/$PROG.make-log.$$" 1>&2
+make -j${THREADS} >$TEMPDIR/$PROG.make-log.$$ 2>&1
+echo "[+] Compile Finished!"
+echo "[+] Installing to: ${INSTALLDIR}/${VERSION}. Full log at: $TEMPDIR/$PROG.install-log.$$"
+make -j${THREADS} install >$TEMPDIR/$PROG.install-log.$$ 2>&1
+echo "[+] Done!"
